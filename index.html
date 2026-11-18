@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>DOB 조립 컨피규레이터</title>
+<title>DOB 옵션 시뮬레이터</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
@@ -263,7 +263,8 @@ const CFG = {
      주소 끝에 ?mode=preset&model=110 을 붙이면 기성 제품 모드로 열립니다. (주소 값이 아래 mode보다 우선)
      모델 이름 규칙: 첫째 자리 = 가로 칸 수(W706), 뒤 두 자리 = 높이 구성(아래 heights 표)
      → 새 기성 모델이 나오면 models에 이름만, products에 카페24 상품번호만 추가하면 됩니다. */
-  mode: 'build',                 // 'build' 조립 컨피규레이터 | 'preset' 기성 제품
+  mode: 'preset',                // 'build' 조립 컨피규레이터 | 'preset' 기성 제품 (옵션 시뮬레이터)
+  lockMode: true,                // true면 주소에 ?mode=build를 붙여도 옵션 시뮬레이터만 보임
   preset: {
     models: ['110','115','120','125','130', '210','215','220','225', '310','315','320','325'],
     heights: { '10':[347], '15':[347,138], '20':[347,347], '25':[347,347,138], '30':[347,347,347] },   // 아래 칸부터 위로
@@ -281,7 +282,7 @@ const CFG = {
   }
 };
 const Q = new URLSearchParams(location.search);
-const PRESET = (Q.get('mode') || CFG.mode) === 'preset';
+const PRESET = CFG.lockMode ? CFG.mode === 'preset' : (Q.get('mode') || CFG.mode) === 'preset';
 const EMBED = Q.get('embed') === '1';   // 카페24 상세페이지 팝업으로 열린 경우
 
 /* ② 화면 문구 (한/영) */
@@ -976,11 +977,31 @@ function capture(){
   const cv = document.createElement('canvas'); cv.width=W; cv.height=H; const g = cv.getContext('2d');
   // 아래쪽에 추가 옵션 기록 (위치: 왼쪽 아래 칸부터 1-1, 1-2 …)
   const rows = optionRows(), pad = 28*k, lh2 = 20*k, colW = 330*k, cols = Math.max(1, Math.floor((W-pad*2)/colW));
+  const F = (wt, px) => `${wt} ${px*k}px Inter, "Pretendard KO", Arial, sans-serif`;
+  if (PRESET){                                   // 기성 제품: 모델명·사이즈 + 단별 도어 + 타공을 아래에 기록
+    const Lo = layout || computeLayout(), f = v => v.toLocaleString('en');
+    const lines = [...doorRows().slice().reverse().map(r=>optLabel(r)), holeLabel()];
+    const pH = pad*0.9 + 22*k + 14*k + lines.length*lh2 + pad*0.8;
+    cv.height = H + pH; g.fillStyle = '#ffffff'; g.fillRect(0,0,W,cv.height);
+    g.drawImage(renderer.domElement,0,0); const lg0 = document.getElementById('logo'), lh0 = 26*k; g.drawImage(lg0, 28*k, 26*k, lh0*lg0.naturalWidth/lg0.naturalHeight, lh0);
+    g.fillStyle = '#e3e3e3'; g.fillRect(pad, H, W-pad*2, Math.max(1, k));
+    g.textBaseline = 'top'; let y = H + pad*0.9;
+    const name = 'DOB ' + S.model; g.fillStyle = '#0b0b0b'; g.font = F(600, 16); g.fillText(name, pad, y);
+    const nw = g.measureText(name).width; g.font = F(300, 12); g.fillStyle = '#6e6e6e';
+    g.fillText(`W ${f(Lo.W)} × H ${f(Lo.H+CFG.preset.feet)} × D ${CFG.depths[0]} mm`, pad + nw + 12*k, y + 3.5*k);
+    y += 22*k + 14*k;
+    lines.forEach(x=>{ const i = x.indexOf(' : '), a = i<0 ? x : x.slice(0,i), b = i<0 ? '' : x.slice(i);
+      g.font = F(600, 12); g.fillStyle = '#0b0b0b'; g.fillText(a, pad, y); const aw = g.measureText(a).width;
+      g.font = F(400, 12); g.fillStyle = '#2b2b2b'; g.fillText(b, pad + aw, y); y += lh2; });
+    const url0 = cv.toDataURL('image/png'); [S.sel, S.sels] = prev; build();
+    dialog({ html:`<p class="ttl">${t('capT')}</p><img src="${url0}" alt="capture"><p class="hint">${t('capHint')}</p><p style="margin-top:16px"><a class="btn primary dl" href="${url0}" download="flatpoint-dob-${S.model}.png">${t('down')}</a></p>` });
+    mbox.querySelector('.ok').classList.remove('primary'); mbox.querySelector('.acts2').style.marginTop = '8px';
+    return;
+  }
   const extraH = rows.length ? pad + 22*k + Math.ceil(rows.length/cols)*lh2 + pad*0.8 : 0;
   cv.height = H + extraH; g.fillStyle = '#ffffff'; g.fillRect(0,0,W,cv.height);
   g.drawImage(renderer.domElement,0,0); const lg = document.getElementById('logo'); const lh = 26*k; g.drawImage(lg, 28*k, 26*k, lh*lg.naturalWidth/lg.naturalHeight, lh);   // 원본 로고 이미지
   if (rows.length){
-    const F = (wt, px) => `${wt} ${px*k}px Inter, "Pretendard KO", Arial, sans-serif`;
     g.fillStyle = '#e3e3e3'; g.fillRect(pad, H, W-pad*2, Math.max(1, k));
     g.textBaseline = 'top'; g.fillStyle = '#0b0b0b'; g.font = F(600, 13); g.fillText(t('extra'), pad, H + pad*0.8);
     rows.forEach((o,i)=>{ const x = pad + (i%cols)*colW, y = H + pad*0.8 + 24*k + Math.floor(i/cols)*lh2;
